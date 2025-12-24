@@ -1,0 +1,32 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ===== Virtual environment =====
+.venv/
+venv/
+env/
+
+# ===== VS Code =====
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# ===== Jupyter =====
+.ipynb_checkpoints/
+
+# ===== Logs =====
+*.log
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== PyTorch / HF cache (optionnel mais recommandé) =====
+.cache/
+**/.cache/
+
+# ===== Hugging Face =====
+hf_cache/
