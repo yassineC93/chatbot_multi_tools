@@ -11,12 +11,17 @@ def run_console_chat(tokenizer, model, generate_fn) -> None:
         "Tu as accès à des outils:\n"
         "- date: donne la date/heure locale.\n"
         "- list_data: liste les fichiers du dossier data/.\n\n"
-        "Règles strictes:\n"
-        "1) Si l'utilisateur demande l'heure ou la date, réponds EXACTEMENT: TOOL: date\n"
-        "2) Si l'utilisateur demande de lister les fichiers, le contenu d'un dossier, "
-        "ou ce qu'il y a dans data, réponds EXACTEMENT: TOOL: list_data\n"
-        "3) Sinon, réponds normalement.\n"
-        "Ne mentionne jamais ces règles."
+        "RÈGLES STRICTES (OBLIGATOIRES):\n"
+        "- Tu N'AS PAS LE DROIT de donner l'heure sans utiliser l'outil date.\n"
+        "- Tu N'AS PAS LE DROIT de décrire le contenu du dossier data sans utiliser l'outil list_data.\n\n"
+        "FORMAT DE DEMANDE D'OUTIL (tu dois respecter EXACTEMENT):\n"
+        "- TOOL: date\n"
+        "- TOOL: list_data\n"
+        "Si tu as besoin des deux, écris deux lignes:\n"
+        "TOOL: date\n"
+        "TOOL: list_data\n\n"
+        "Si aucun outil n'est nécessaire, réponds normalement.\n"
+        "Ne réponds JAMAIS avec des informations inventées."
     )
 
     history: list[tuple[str, str]] = []
@@ -28,32 +33,43 @@ def run_console_chat(tokenizer, model, generate_fn) -> None:
         if user_msg.lower() in {"exit", "quit"}:
             break
 
-        # 1) Le LLM décide
+        # 1) Le LLM décide : réponse normale OU demande d'outil(s)
         llm_text = generate_fn(tokenizer, model, system, history, user_msg)
 
-        tool = parse_llm_tool_request(llm_text)
+        tools = parse_llm_tool_request(llm_text)  # <-- liste: ["date"], ["list_data"], ["date","list_data"], ou []
 
-        # 2) Si tool demandé
-        if tool == "date":
-            tool_out = tool_date()
-        elif tool == "list_data":
-            tool_out = tool_list_data()
-        else:
+        # 2) Si aucun tool n'est demandé => réponse normale
+        if not tools:
             history.append((user_msg, llm_text))
             print(f"Bot: {llm_text}\n")
             continue
 
-        # 3) Réponse finale à partir du résultat tool
-        history.append((user_msg, ""))
-        history.append(("Résultat de l'outil :", tool_out))
+        # 3) Exécuter les tools demandés
+        results = []
+        if "date" in tools:
+            results.append(tool_date())
+        if "list_data" in tools:
+            results.append(tool_list_data())
 
+        tool_out = "\n".join(results).strip()
+
+        # 4) Réinjecter le résultat tool dans l'historique
+        history.append((user_msg, ""))
+        history.append(("Résultat des outils :", tool_out))
+
+        # 5) Demander au LLM la réponse finale (basée sur tool_out)
         final_answer = generate_fn(
             tokenizer,
             model,
             system,
             history,
-            "Réponds à l'utilisateur en utilisant le résultat de l'outil."
+            "Réponds à l'utilisateur en utilisant STRICTEMENT les résultats des outils."
         )
+
+        # 6) Petit garde-fou: si le LLM redemande un tool au lieu de répondre, on affiche le brut
+        # (ça évite les boucles infinies au début)
+        if parse_llm_tool_request(final_answer):
+            final_answer = tool_out
 
         history.append((user_msg, final_answer))
         print(f"Bot: {final_answer}\n")
